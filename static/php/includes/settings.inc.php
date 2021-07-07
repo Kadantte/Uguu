@@ -25,8 +25,21 @@ define('UGUU_DB_USER', 'NULL');
 /* @param string UGUU_DB_PASS Database password */
 define('UGUU_DB_PASS', 'NULL');
 
-/** Log IP of uploads */
-define('LOG_IP', 'no');
+/** 
+ * @param boolean Log IP of uploads 
+ */
+define('LOG_IP', false);
+
+/** 
+ * @param boolean anti-dupe
+ */
+define('ANTI_DUPE', false);
+
+/** 
+ * @param boolean blacklist DB
+ * ONLY ENABLE THIS IS YOU ARE USING THE LATEST DB SCHEMA!
+ */
+define('BLACKLIST_DB', false);
 
 /*
  * File system location where to store uploaded files
@@ -38,7 +51,7 @@ define('UGUU_FILES_ROOT', '/path/to/file/');
 /*
  * Maximum number of iterations while generating a new filename
  *
- * Pomf uses an algorithm to generate random filenames. Sometimes a file may
+ * Uguu uses an algorithm to generate random filenames. Sometimes a file may
  * exist under a randomly generated filename, so we count tries and keep trying.
  * If this value is exceeded, we give up trying to generate a new filename.
  *
@@ -59,7 +72,7 @@ define('UGUU_FILES_LENGTH', 8);
  *
  * @param string UGUU_URL URI with trailing delimiter
  */
-define('UGUU_URL', 'https://url.to.subdomain.where.files.will.be.served.com');
+define('UGUU_URL', 'https://url.to.subdomain.where.files.will.be.served.com/');
 
 /*
  * URI for filename generation
@@ -70,24 +83,20 @@ define('ID_CHARSET', 'abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNOPQRSTUVWXYZ');
 
 /*
  * Filtered mime types
- * @param string[] $FILTER_MIME allowed/blocked mime types
  */
-//$FILTER_MIME = array("application/octet-stream", "application/msword", "text/html", "application/x-dosexec", "application/zip", "application/java", "application/java-archive", "application/pdf", "application/x-executable");
-//$FILTER_EXT = array("exe", "scr", "com", "vbs", "bat", "cmd", "htm", "html", "zip", "jar", "msi", "apk", "pdf");
-
-define('CONFIG_BLOCKED_EXTENSIONS', serialize(['exe', 'scr', 'com', 'vbs', 'bat', 'cmd', 'htm', 'html', 'jar', 'msi', 'apk', 'phtml']));
-define('CONFIG_BLOCKED_MIME', serialize(['application/msword', 'text/html', 'application/x-dosexec', 'application/java', 'application/java-archive', 'application/x-executable', 'application/x-mach-binary']));
+define('CONFIG_BLOCKED_EXTENSIONS', serialize(['exe', 'scr', 'com', 'vbs', 'bat', 'cmd', 'htm', 'html', 'jar', 'msi', 'apk', 'phtml', 'svg']));
+define('CONFIG_BLOCKED_MIME', serialize(['application/msword', 'text/html', 'application/x-dosexec', 'application/java', 'application/java-archive', 'application/x-executable', 'application/x-mach-binary', 'image/svg+xml']));
 
 /**
- * Filter mode: whitelist (true) or blacklist (false).
- *
- * @param bool $FILTER_MODE mime type filter mode
+ * Whitelist or blacklist mode
+ * @param boolean blacklist (false) | whitelist (true)
  */
-$FILTER_MODE = false;
+define('CONFIG_FILTER_MODE', false);
+
 /**
  * Double dot file extensions.
  *
- * Pomf keeps the last file extension for the uploaded file. In other words, an
+ * Uguu keeps the last file extension for the uploaded file. In other words, an
  * uploaded file with `.tar.gz` extension will be given a random filename which
  * ends in `.gz` unless configured here to ignore discards for `.tar.gz`.
  *

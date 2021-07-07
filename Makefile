@@ -32,17 +32,16 @@ ifneq (,$(findstring moe,$(MODULES)))
 endif
 	
 min-css:
-	$(NODE) $(CURDIR)/node_modules/.bin/cleancss --skip-rebase --O1 specialComments:0 $(CURDIR)/static/css/uguu.css --output $(CURDIR)/build/uguu.min.css
+	$(NODE) $(CURDIR)/node_modules/.bin/cleancss $(CURDIR)/static/css/uguu.css --output $(CURDIR)/build/uguu.min.css
 
 min-js:
 	echo "// @source https://github.com/nokonoko/uguu/tree/master/static/js" > $(CURDIR)/build/uguu.min.js 
 	echo "// @license magnet:?xt=urn:btih:d3d9a9a6595521f9666a5e94cc830dab83b65699&dn=expat.txt Expat" >> $(CURDIR)/build/uguu.min.js
-	$(NODE) $(CURDIR)/node_modules/.bin/uglifyjs  --screw-ie8 ./static/js/app.js >> $(CURDIR)/build/uguu.min.js 
+	$(NODE) $(CURDIR)/node_modules/.bin/uglifyjs ./static/js/app.js >> $(CURDIR)/build/uguu.min.js 
 	echo "// @license-end" >> $(CURDIR)/build/uguu.min.js
 
 copy-img:
 	cp -v $(CURDIR)/static/img/*.png $(CURDIR)/build/img/
-	cp -v $(CURDIR)/static/img/favicon.ico $(CURDIR)/build/favicon.ico
 
 copy-php:
 ifneq ($(wildcard $(CURDIR)/static/php/.),)

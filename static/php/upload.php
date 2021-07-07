@@ -3,7 +3,6 @@
  * Handles POST uploads, generates filenames, moves files around and commits
  * uploaded metadata to database.
  */
-
 require_once 'classes/Response.class.php';
 require_once 'classes/UploadException.class.php';
 require_once 'classes/UploadedFile.class.php';
@@ -22,11 +21,13 @@ function generateName($file)
     global $doubledots;
 
     // We start at N retries, and --N until we give up
-    $tries = POMF_FILES_RETRIES;
-    $length = POMF_FILES_LENGTH;
+    $tries = UGUU_FILES_RETRIES;
+    $length = UGUU_FILES_LENGTH;
+
     //Get EXT
     $ext = pathinfo($file->name, PATHINFO_EXTENSION);
-    //Get mime
+
+    //Get MIME
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
     $type_mime = finfo_file($finfo, $file->tempfile);
     finfo_close($finfo);
@@ -42,8 +43,8 @@ function generateName($file)
     do {
         // Iterate until we reach the maximum number of retries
         if ($tries-- === 0) {
-	        http_response_code(500);
-        throw new Exception(
+            http_response_code(500);
+            throw new Exception(
                 'Gave up trying to find an unused name',
                 500
             ); // HTTP status code "500 Internal Server Error"
@@ -60,30 +61,66 @@ function generateName($file)
             $name .= '.'.$ext;
         }
 
-       //Check if mime is blacklisted
-       if (in_array($type_mime, unserialize(CONFIG_BLOCKED_MIME))) {
-	        http_response_code(415);
-        throw new Exception ('Extension type not allowed.');
-            exit(0);
-          }
-
-
-        //Check if EXT is blacklisted
-        if (in_array($ext, unserialize(CONFIG_BLOCKED_EXTENSIONS))) {
-            http_response_code(415);           
-        throw new Exception ('Extension type not allowed.');
-            exit(0);
+        // Check if the file is blacklisted
+        if(BLACKLIST_DB){
+            $q = $db->prepare('SELECT hash, COUNT(*) AS count FROM blacklist WHERE hash = (:hash)');
+            $q->bindValue(':hash', $file->getSha1(), PDO::PARAM_STR);
+            $q->execute();
+            $result = $q->fetch();
+            if ($result['count'] > 0) {
+                http_response_code(415);
+                throw new Exception(
+                    'File blacklisted!',
+                    415
+                );
+            exit(0);    
+            }
         }
 
-        // Check blacklist DB
-        $q = $db->prepare('SELECT hash, COUNT(*) AS count FROM blacklistedfiles WHERE hash = (:hash)');
-        $q->bindValue(':hash', $file->getSha1(), PDO::PARAM_STR);
-        $q->execute();
-        $result = $q->fetch();
-        if ($result['count'] > 0) {
-            http_response_code(415);
-            throw new UploadException(UPLOAD_ERR_BLACKLISTED);
-            exit(0);
+        // Check if file is whitelisted or blacklisted
+        switch (CONFIG_FILTER_MODE) {
+
+            case false:
+                //check if MIME is blacklisted
+                if (in_array($type_mime, unserialize(CONFIG_BLOCKED_MIME))) {
+                    http_response_code(415);
+                    throw new Exception(
+                        'File type not allowed!',
+                        415
+                    );
+                exit(0);   
+                }
+                //Check if EXT is blacklisted
+                if (in_array($ext, unserialize(CONFIG_BLOCKED_EXTENSIONS))) {
+                    http_response_code(415);
+                    throw new Exception(
+                        'File type not allowed!',
+                        415
+                    );
+                exit(0);  
+                }
+            break;
+
+            case true:
+                //Check if MIME is whitelisted
+                if (!in_array($type_mime, unserialize(CONFIG_BLOCKED_MIME))) {
+                    http_response_code(415);
+                    throw new Exception(
+                        'File type not allowed!',
+                        415
+                    );
+                exit(0);  
+                }
+                //Check if EXT is whitelisted
+                if (!in_array($ext, unserialize(CONFIG_BLOCKED_EXTENSIONS))) {
+                    http_response_code(415);
+                    throw new Exception(
+                        'File type not allowed!',
+                        415
+                    );
+                exit(0);  
+                }
+            break;
         }
 
         // Check if a file with the same name does already exist in the database
@@ -92,9 +129,10 @@ function generateName($file)
         $q->execute();
         $result = $q->fetchColumn();
         // If it does, generate a new name
-        } while ($result > 0);
-            return $name;
-        }
+    } while ($result > 0);
+
+    return $name;
+}
 
 /**
  * Handles the uploading and db entry for a file.
@@ -106,27 +144,44 @@ function generateName($file)
 function uploadFile($file)
 {
     global $db;
-    global $FILTER_MODE;
-    global $FILTER_MIME;
 
     // Handle file errors
     if ($file->error) {
         throw new UploadException($file->error);
     }
 
+    //fixes a bug
+    $lol = $file->getSha1();
+
+    // Check if a file with the same hash and size (a file which is the same)
+    // does already exist in the database; if it does, return the proper link
+    // and data. PHP deletes the temporary file just uploaded automatically.
+    if(ANTI_DUPE){
+    $q = $db->prepare('SELECT filename, COUNT(*) AS count FROM files WHERE hash = (:hash) AND size = (:size)');
+    $q->bindValue(':hash', $file->getSha1(), PDO::PARAM_STR);
+    $q->bindValue(':size', $file->size, PDO::PARAM_INT);
+    $q->execute();
+    $result = $q->fetch();
+    if ($result['count'] > 0) {
+        return [
+            'hash' => $file->getSha1(),
+            'name' => $file->name,
+            'url' => UGUU_URL.rawurlencode($result['filename']),
+            'size' => $file->size,
+        ];
+    }
+}
+
     // Generate a name for the file
     $newname = generateName($file);
 
-    // Get IP
-    $ip = $_SERVER['REMOTE_ADDR'];
-
     // Store the file's full file path in memory
-    $uploadFile = POMF_FILES_ROOT . $newname;
+    $uploadFile = UGUU_FILES_ROOT.$newname;
 
     // Attempt to move it to the static directory
     if (!move_uploaded_file($file->tempfile, $uploadFile)) {
-            http_response_code(500);        
-    throw new Exception(
+        http_response_code(500);
+        throw new Exception(
             'Failed to move file to destination',
             500
         ); // HTTP status code "500 Internal Server Error"
@@ -134,46 +189,46 @@ function uploadFile($file)
 
     // Need to change permissions for the new file to make it world readable
     if (!chmod($uploadFile, 0644)) {
-            http_response_code(500);       
-    throw new Exception(
+        http_response_code(500);
+        throw new Exception(
             'Failed to change file permissions',
             500
         ); // HTTP status code "500 Internal Server Error"
     }
 
-    // Add it to the database
-    if(LOG_IP == 'yes'){
-        $q = $db->prepare('INSERT INTO files (hash, originalname, filename, size, date, ip) VALUES (:hash, :orig, :name, :size, :date, :ip)');
-    }else{
-	    $q = $db->prepare('INSERT INTO files (hash, originalname, filename, size, date) VALUES (:hash, :orig, :name, :size, :date)');
+    // Log IP
+    if(LOG_IP){
+        $ip = $_SERVER['REMOTE_ADDR'];
+    } else {
+        $ip = null;
     }
+
     // Common parameters binding
+    $q = $db->prepare('INSERT INTO files (hash, originalname, filename, size, date, ip) VALUES (:hash, :orig, :name, :size, :date, :ip)');
     $q->bindValue(':hash', $file->getSha1(), PDO::PARAM_STR);
     $q->bindValue(':orig', strip_tags($file->name), PDO::PARAM_STR);
     $q->bindValue(':name', $newname, PDO::PARAM_STR);
     $q->bindValue(':size', $file->size, PDO::PARAM_INT);
-    $q->bindValue(':date', time(), PDO::PARAM_INT);
+    $q->bindValue(':date', time(), PDO::PARAM_STR);
     $q->bindValue(':ip', $ip, PDO::PARAM_STR);
     $q->execute();
 
-    return array(
+    return [
         'hash' => $file->getSha1(),
         'name' => $file->name,
-        'url' => POMF_URL.rawurlencode($newname),
+        'url' => UGUU_URL.rawurlencode($newname),
         'size' => $file->size,
-    );
+    ];
 }
 
 /**
  * Reorder files array by file.
  *
- * @param  $_FILES
- *
  * @return array
  */
 function diverseArray($files)
 {
-    $result = array();
+    $result = [];
 
     foreach ($files as $key1 => $value1) {
         foreach ($value1 as $key2 => $value2) {
@@ -187,13 +242,11 @@ function diverseArray($files)
 /**
  * Reorganize the $_FILES array into something saner.
  *
- * @param  $_FILES
- *
  * @return array
  */
 function refiles($files)
 {
-    $result = array();
+    $result = [];
     $files = diverseArray($files);
 
     foreach ($files as $file) {
